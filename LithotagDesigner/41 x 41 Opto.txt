@@ -1,0 +1,13 @@
+Name = 41 x 41 Opto
+TagStyle = Lithotag
+Optical = 1
+SEM = 0
+LinkZill = 0
+WireBond = 0
+TagSpacing = 20
+numTagsX = 201
+numTagsY = 201
+Left_TAG = 0
+Bottom_TAG = 0
+Left_CAD = 3000
+Bottom_CAD = 3000
