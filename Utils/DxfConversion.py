@@ -6,6 +6,7 @@ from matplotlib.patches import Polygon
 import numpy as np
 import io
 
+
 def dxf_to_ndarray(doc: ezdxf.document.Drawing, width_px: int) -> np.ndarray:
 
     msp = doc.modelspace()
