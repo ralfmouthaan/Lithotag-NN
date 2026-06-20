@@ -8,6 +8,7 @@ import ezdxf
 import ezdxf.document
 import numpy as np
 from math import cos, sin, pi
+from Utils.DxfConversion import dxf_to_ndarray
 
 Params = {
     'Poly': True,
@@ -18,14 +19,14 @@ Params = {
     'NoEncryptedBits': 24
     }
 
-def DrawDiamondtag(doc, XPos, YPos, Size, XVal, YVal):
+def _DrawDiamondtag(doc, XPos, YPos, Size, XVal, YVal):
 
     _DrawCaps(doc, XPos, YPos, Size)
     msgencrypted = _Encode(XVal, YVal)
     _DrawNumber(doc, XPos, YPos, Size, msgencrypted)
 
 def _DrawCaps(doc, XPos, YPos, Size):
-    
+
     if Params["Poly"]:
         _DrawPolyCaps(doc, XPos, YPos, Size)
     else:
@@ -110,7 +111,7 @@ def _DrawNonPolyCaps(doc, XPos, YPos, Size):
     msp.add_line(ECap_SArc.start_point, ECap_WArc.start_point)
 
 def _DrawCircle(doc, XPos, YPos, Size):
-    
+
     if Params["Poly"]:
         _DrawPolyCircle(doc, XPos, YPos, Size)
     else:
@@ -237,7 +238,7 @@ def _Encode(XVal, YVal):
 
     # Interleave bits while inverting order of y
     msg = np.zeros((Params["NoUnencryptedBits"], 1), dtype="uint8")
-    for i in range(round(Params["NoUnencryptedBits"]/2)):      
+    for i in range(round(Params["NoUnencryptedBits"]/2)):
         msg[2*i + 0, 0] = (XVal >> (round(Params["NoUnencryptedBits"]/2) - i - 1)) & 1
         msg[2*i + 1, 0] = (YVal >> i) & 1
 
@@ -248,3 +249,18 @@ def _Encode(XVal, YVal):
     msgencrypted = msgencrypted.squeeze().tolist()
 
     return msgencrypted
+
+
+def CreateDiamondtag(XVal: int, YVal: int, Width: int) -> dict:
+
+    doc = ezdxf.new(dxfversion="R2010")
+    doc.layers.add("Diamondtags")
+    _DrawDiamondtag(doc, 0.0, 0.0, 1.0, XVal, YVal)
+    img = dxf_to_ndarray(doc, Width)
+
+    return {
+        'img':     img,
+        'XVal':    XVal,
+        'YVal':    YVal,
+        'Bindata': _Encode(XVal, YVal),
+    }

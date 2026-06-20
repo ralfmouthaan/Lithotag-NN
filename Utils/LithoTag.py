@@ -6,6 +6,7 @@
 
 import ezdxf
 from math import sqrt, sin, cos, pi
+from Utils.DxfConversion import dxf_to_ndarray
 
 Params = {
     'Poly': True,
@@ -17,11 +18,7 @@ Params = {
     'NoMessageBits': 32
     }
 
-def DrawLithotag(doc, XPos: float, YPos : float, Scale: float, XVal: int, YVal: int):
-
-    """
-    Generate a lithotag at position (XPos, YPos) with values (XVal, YVal) encoded.
-    """
+def _DrawLithotag(doc, XPos: float, YPos : float, Scale: float, XVal: int, YVal: int):
 
     _DrawSpine(doc, XPos, YPos, Scale)
     _DrawXVal(doc, XPos, YPos, Scale, XVal)
@@ -36,25 +33,25 @@ def _DrawSpine(doc, XPos, YPos, Scale):
     else:
         _DrawNonPolySpine(doc, XPos, YPos, Scale)
 
-def _DrawNonPolySpine(doc, XPos, YPos, Scale): 
+def _DrawNonPolySpine(doc, XPos, YPos, Scale):
 
     msp = doc.modelspace()
 
     SpineLength = Scale * Params["NoLithotagRings"]
     CapRadius = Scale * Params["FillFactor"] * (sqrt(3) - 1)
-    
+
     # Spine Caps
     N_Cap  = msp.add_arc((XPos, YPos + 2*SpineLength), CapRadius, -180, 0, False)
     SE_Cap = msp.add_arc((XPos + sqrt(3)*SpineLength, YPos -SpineLength), CapRadius, 60, -120, False)
     S_Cap  = msp.add_arc((XPos, YPos - 2*SpineLength), CapRadius, 0, 180, False)
     SW_Cap = msp.add_arc((XPos -sqrt(3)*SpineLength, YPos - SpineLength), CapRadius, -60, 120, False)
-    
+
     # Spine Fillets
     NE_Fillet = msp.add_arc((XPos + Scale*sqrt(3),   YPos + Scale), Scale*sqrt(3) - CapRadius, -180, -120, True)
     SE_Fillet = msp.add_arc((XPos + Scale*sqrt(3)/2, YPos - Scale*3/2), Scale*sqrt(3)/2 - CapRadius, 60, -180, True)
     SW_Fillet = msp.add_arc((XPos - Scale*sqrt(3)/2, YPos - Scale*3/2), Scale*sqrt(3)/2 - CapRadius, 0, 120, True)
     NW_Fillet = msp.add_arc((XPos - Scale*sqrt(3), YPos + Scale), Scale*sqrt(3) - CapRadius, -60, 0, True)
-    
+
     # Spine Lines
     msp.add_line(N_Cap.start_point, NE_Fillet.start_point)
     msp.add_line(NE_Fillet.end_point,SE_Cap.end_point)
@@ -71,7 +68,7 @@ def _DrawPolySpine(doc, XPos, YPos, Scale):
 
     SpineLength = Scale * Params["NoLithotagRings"]
     CapRadius = Scale * Params["FillFactor"] * (sqrt(3) - 1)
-    
+
     Spine = msp.add_lwpolyline([])
     _AppendPolyArc(Spine, XPos, YPos + 2*SpineLength, CapRadius, 180, 0) # North Cap
     _AppendPolyArc(Spine, XPos + Scale*sqrt(3),   YPos + Scale, Scale*sqrt(3) - CapRadius, -180, -120) # NE Fillet
@@ -86,7 +83,7 @@ def _DrawPolySpine(doc, XPos, YPos, Scale):
 def _GetCoordinateLocs(strXY, XPos, YPos, Scale):
 
     if isinstance(strXY, str) == False:
-        raise NameError("Expecting string")        
+        raise NameError("Expecting string")
 
     if strXY == "X":
         direction = -1
@@ -179,7 +176,7 @@ def _DrawNumber(doc, intNumber, Scale, arrX, arrY):
             _DrawCircle(doc, arrX[idxBit], arrY[idxBit], Scale*Params["FillFactor"])
 
 def _DrawCircle(doc, XPos, YPos, Size):
-    
+
     if Params["Poly"]:
         _DrawPolyCircle(doc, XPos, YPos, Size)
     else:
@@ -229,3 +226,20 @@ def _AppendPolyArc(polyline, XCentre, YCentre, Radius, Angle1, Angle2):
         X = XCentre + Radius*cos(angle)
         Y = YCentre + Radius*sin(angle)
         polyline.append_points([(X, Y)])
+
+
+def CreateLithotag(XVal: int, YVal: int, Width: int) -> dict:
+
+    doc = ezdxf.new(dxfversion="R2010")
+    doc.layers.add("Lithotags")
+    _DrawLithotag(doc, 0.0, 0.0, 1.0, XVal, YVal)
+    img = dxf_to_ndarray(doc, Width)
+
+    return {
+        'img':    img,
+        'XVal':   XVal,
+        'YVal':   YVal,
+        'XCheck': _EncodeCheckSum(XVal),
+        'YCheck': _EncodeCheckSum(YVal),
+        'Width':  Width
+    }
