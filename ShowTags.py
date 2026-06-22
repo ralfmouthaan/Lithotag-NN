@@ -11,7 +11,7 @@ iterator = LithotagIterator()
 fig, axes = plt.subplots(2, 5, figsize=(15, 6))
 for ax in axes.flat:
     sample = next(iterator)
-    ax.imshow(sample['img'], cmap='gray')
+    ax.imshow(sample['img'], cmap='gray', vmin=0, vmax=255)
     ax.set_title(f"({sample['XVal']}, {sample['YVal']})  {sample['Width']}px")
     ax.axis('off')
 

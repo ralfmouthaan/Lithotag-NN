@@ -4,9 +4,12 @@
 #
 # Functions to generate a lithotag
 
+import random
+import numpy as np
 import ezdxf
 from math import sqrt, sin, cos, pi
 from Utils.DxfConversion import dxf_to_ndarray
+from Utils.Zernike import ApplyZernike
 
 Params = {
     'Poly': True,
@@ -17,6 +20,19 @@ Params = {
     'NoCheckBits': 3,
     'NoMessageBits': 32
     }
+
+_SIZE_MIN          = 30
+_SIZE_MAX          = 150
+_NUM_ZERNIKES      = 11
+_ZERNIKE_MAX       =  0.75
+_TIP_TILT_MAX      =  5.0
+_DEFOCUS_MAX       =  5.0
+_READ_NOISE_MIN    =  1.0
+_READ_NOISE_MAX    =  5.0
+_BIAS_MIN          =  0.0
+_BIAS_MAX          = 50.0
+_ILLUM_MIN         = 100.0
+_ILLUM_MAX         = 255.0
 
 def _DrawLithotag(doc, XPos: float, YPos : float, Scale: float, XVal: int, YVal: int):
 
@@ -228,6 +244,35 @@ def _AppendPolyArc(polyline, XCentre, YCentre, Radius, Angle1, Angle2):
         polyline.append_points([(X, Y)])
 
 
+def TagValuesToBin(XVal: int, YVal: int, XCheck: int, YCheck: int) -> np.ndarray:
+
+    NoBits = Params["NoLithotagRings"] ** 2
+    NoCheckBits = Params["NoCheckBits"]
+    result = np.zeros(2 * NoBits + 2 * NoCheckBits, dtype=int)
+
+    for i in range(NoBits):
+        result[i] = (XVal >> i) & 1
+    for i in range(NoBits):
+        result[NoBits + i] = (YVal >> i) & 1
+    for i in range(NoCheckBits):
+        result[2*NoBits + i] = (XCheck >> i) & 1
+    for i in range(NoCheckBits):
+        result[2*NoBits + NoCheckBits + i] = (YCheck >> i) & 1
+
+    return result
+
+def BinToTagValues(arrBin: np.ndarray) -> tuple:
+
+    NoBits = Params["NoLithotagRings"] ** 2
+    NoCheckBits = Params["NoCheckBits"]
+
+    XVal   = int(sum(arrBin[i] << i for i in range(NoBits)))
+    YVal   = int(sum(arrBin[NoBits + i] << i for i in range(NoBits)))
+    XCheck = int(sum(arrBin[2*NoBits + i] << i for i in range(NoCheckBits)))
+    YCheck = int(sum(arrBin[2*NoBits + NoCheckBits + i] << i for i in range(NoCheckBits)))
+
+    return XVal, YVal, XCheck, YCheck
+
 def CreateLithotag(XVal: int, YVal: int, Width: int) -> dict:
 
     doc = ezdxf.new(dxfversion="R2010")
@@ -243,3 +288,40 @@ def CreateLithotag(XVal: int, YVal: int, Width: int) -> dict:
         'YCheck': _EncodeCheckSum(YVal),
         'Width':  Width
     }
+
+class LithotagIterator:
+
+    def __iter__(self):
+        return self
+
+    def __next__(self) -> dict:
+        size = random.randint(_SIZE_MIN, _SIZE_MAX)
+        xval = random.randint(0, 100)
+        yval = random.randint(0, 100)
+
+        result = CreateLithotag(xval, yval, size)
+
+        coeffs = [0.0,
+                  random.uniform(-_TIP_TILT_MAX, _TIP_TILT_MAX),
+                  random.uniform(-_TIP_TILT_MAX, _TIP_TILT_MAX),
+                  random.uniform(-_DEFOCUS_MAX,  _DEFOCUS_MAX)] + \
+                 [random.uniform(-_ZERNIKE_MAX, _ZERNIKE_MAX)
+                  for _ in range(_NUM_ZERNIKES - 3)]
+        result['coeffs'] = coeffs
+
+        # TODO:
+        # Make sure this all works
+        # Add some kind of offset?
+        # Multiply by random number instead of 255 to account for different illuminations
+        result['img'] = result['img']
+        result['img'] = result['img'] * random.uniform(_ILLUM_MIN, _ILLUM_MAX)
+        result['img'] = result['img'].astype(np.float32)
+        result['img'] = ApplyZernike(result['img'], *coeffs)
+        result['img'] = np.random.poisson(result['img'])
+        result['img'] = result['img'].astype(np.float32)
+        result['img'] += np.random.normal(0.0, random.uniform(_READ_NOISE_MIN, _READ_NOISE_MAX), result['img'].shape)
+        result['img'] += random.uniform(_BIAS_MIN, _BIAS_MAX)
+        result['img'] = np.clip(result['img'], 0, 255)
+        result['img'] = result['img'].astype(np.uint8)
+
+        return result
